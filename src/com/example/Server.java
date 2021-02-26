@@ -73,7 +73,7 @@ public class Server {
 
                     for (SocketChannel client: clients){
                         ByteBuffer wBuff = ByteBuffer.allocate(256);
-                        wBuff.put(("Message = "+msg).getBytes());
+                        wBuff.put(msg.getBytes());
                         wBuff.flip();
                         client.write(wBuff);
                     }

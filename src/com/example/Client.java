@@ -5,10 +5,11 @@ import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
-import java.nio.charset.StandardCharsets;
 import java.util.Iterator;
 import java.util.Scanner;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class Client {
     public static void main(String[] args) throws Exception {
@@ -18,7 +19,11 @@ public class Client {
         clientCh.configureBlocking(false);
         clientCh.register(selector, SelectionKey.OP_CONNECT);
 
+        Scanner scanner = new Scanner(System.in);
+        ExecutorService executorService = Executors.newSingleThreadExecutor(Executors.defaultThreadFactory());
+
         clientCh.connect(new InetSocketAddress("127.0.0.1", 9000));
+
 
         while (true){
             selector.select();
@@ -26,37 +31,58 @@ public class Client {
             Iterator<SelectionKey> it = selectionKeys.iterator();
             while (it.hasNext()){
                 SelectionKey key = it.next();
-                it.remove();
                 //check or do something
                 if (key.isConnectable()){
                     SocketChannel channel = (SocketChannel) key.channel();
-                    if (!channel.finishConnect()){
-                        channel.close();
-                        continue;
-                    }
-                    channel.configureBlocking(false);
-                    channel.register(selector, SelectionKey.OP_WRITE | SelectionKey.OP_READ);
-                }
-
-                if (key.isWritable()){
-                    //client ready fo write
-                    SocketChannel ch = (SocketChannel) key.channel();
-                    ByteBuffer buff = ByteBuffer.allocate(20);
-
-//                    String msg = String.format("TIME:%d\n", System.currentTimeMillis());
-                    buff.put("test".getBytes());
+                    channel.finishConnect();
+//                    if (!channel.finishConnect()){
+//                        channel.close();
+//                        continue;
+//                    }
+                    ByteBuffer buff = ByteBuffer.allocate(256);
                     buff.flip();
-                    ch.write(buff);
-                    Thread.sleep(1000);
+                    channel.write(buff);
+
+                    executorService.submit(() -> {
+                        while (true){
+                            buff.clear();
+                            System.out.print("Input: ");
+                            String message = scanner.nextLine();
+                            buff.put(message.getBytes());
+                            buff.flip();
+                            channel.write(buff);
+                        }
+                    });
+
+                    channel.configureBlocking(false);
+                    channel.register(selector, SelectionKey.OP_READ);
                 }
+
+//                if (key.isWritable()){
+//                    //client ready fo write
+//                    SocketChannel ch = (SocketChannel) key.channel();
+//                    ByteBuffer buff = ByteBuffer.allocate(20);
+//
+////                    String msg = String.format("TIME:%d\n", System.currentTimeMillis());
+//                    buff.put("test".getBytes());
+//                    buff.flip();
+//                    ch.write(buff);
+//                    Thread.sleep(1000);
+//                }
 
                 if (key.isReadable()){
                     SocketChannel ch = (SocketChannel) key.channel();
-                    ByteBuffer buff = ByteBuffer.allocate(20);
-                    ch.read(buff);
+                    ByteBuffer buff = ByteBuffer.allocate(256);
+                    int n = ch.read(buff);
+                    if (n == -1){
+                        ch.close();
+                        continue;
+                    }
                     buff.flip();
-                    System.out.println(new String(buff.array()));
+                    System.out.println(new String(buff.array()).trim());
                 }
+                it.remove();
+
             }
         }
     }
